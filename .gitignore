@@ -1,0 +1,11 @@
+.venv/
+data/rentshield.db
+data/uploads/
+data/models/
+data/rent_data.csv
+build/
+*.so
+__pycache__/
+.pytest_cache/
+.claude/
+.DS_Store

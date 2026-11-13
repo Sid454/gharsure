@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nestly · Rent safe. Live happy.</title>
+<meta name="theme-color" content="#ff385c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Nestly">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" href="/static/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#explore"><span class="logo">🏡</span>nestly<span class="ai">AI</span></a>
+  <nav id="nav"></nav>
+  <div class="acct">
+    <div id="mode-switch" class="modeswitch hidden"><button data-mode="renter">🔑 Renter</button><button data-mode="owner">🏠 Owner</button></div>
+    <a href="#account" id="acct-btn" class="btn sm">Sign in</a>
+  </div>
+  <button id="install-btn" class="btn primary sm hidden">⬇ Install app</button>
+</header>
+
+<!-- Mobile app bottom tab bar -->
+<nav class="tabbar" id="tabbar"></nav>
+
+<main>
+<!-- ============ EXPLORE ============ -->
+<section id="tab-explore" class="tab">
+  <div class="hero">
+    <h1>Find a vacant flat. Book a visit. Deal directly with the owner.</h1>
+    <p>Every listing is checked by AI for stolen photos, fake prices and scam messages.</p>
+    <form id="search" class="searchbar">
+      <label>City<select name="city" id="f-city"><option value="">All cities</option></select></label>
+      <label>Max rent<input name="max_rent" type="number" min="0" step="1000" placeholder="₹ any"></label>
+      <label>BHK<select name="bhk"><option value="">Any</option><option>1</option><option>2</option><option>3</option><option value="4">4+</option></select></label>
+      <label>Sort<select name="sort"><option value="newest">Newest</option><option value="price_low">Price: low → high</option><option value="price_high">Price: high → low</option><option value="safest">Safest first</option></select></label>
+      <button class="btn primary">Search</button>
+    </form>
+  </div>
+  <div class="explore">
+    <div><div id="result-count" class="muted"></div><div id="cards" class="cards"></div></div>
+    <div class="mapwrap"><div id="map"></div></div>
+  </div>
+</section>
+
+<!-- ============ POST ============ -->
+<section id="tab-post" class="tab narrow">
+  <h2>List your flat, free</h2>
+  <p class="muted">Tenants contact you directly, no broker. Your number stays hidden until you accept a visit request.</p>
+  <form id="post-form" class="card form">
+    <label class="full">Title<input name="title" required minlength="5" maxlength="120" placeholder="e.g. Sunny 2BHK near metro"></label>
+    <label>City<select name="city" id="p-city" required></select></label>
+    <label>Locality<select name="locality" id="p-locality" required></select></label>
+    <label>BHK<input name="bhk" type="number" min="1" max="10" value="2" required></label>
+    <label>Area (sq ft)<input name="sqft" type="number" min="100" value="900" required></label>
+    <label>Furnishing<select name="furnishing"><option value="semi-furnished">Semi-furnished</option><option value="furnished">Furnished</option><option value="unfurnished">Unfurnished</option></select></label>
+    <label>Monthly rent (₹)<input name="rent" type="number" min="500" required></label>
+    <label class="full">Description<textarea name="description" rows="4" required minlength="10" placeholder="Amenities, rules, when tenants can visit…"></textarea></label>
+    <label>Your name<input name="owner_name" required minlength="2"></label>
+    <label>Phone<input name="owner_phone" required pattern="[0-9 +\-]{10,15}" placeholder="10-digit mobile"></label>
+    <div class="full"><span class="lbl">Location: click on the map to place your flat</span><div id="pick-map" class="pickmap"></div><span id="pick-coords" class="muted small"></span></div>
+    <label class="full">Photos (1–6)<input name="photos" id="p-photos" type="file" accept="image/*" multiple required></label>
+    <div id="p-previews" class="previews full"></div>
+    <button class="btn primary full" id="post-btn">Publish listing</button>
+  </form>
+  <div id="post-result"></div>
+</section>
+
+<!-- ============ CHECK ============ -->
+<section id="tab-check" class="tab narrow">
+  <h2>Check any listing before you pay</h2>
+  <p class="muted">Seen a flat on OLX, Facebook or WhatsApp? Paste the details. The AI checks photos, price, wording and reported numbers.</p>
+  <form id="check-form" class="card form">
+    <label class="full">Listing text / chat message<textarea name="text" rows="5" placeholder="Paste the ad or the owner's WhatsApp messages"></textarea></label>
+    <label>City<select name="city" id="c-city"><option value="">Unknown</option></select></label>
+    <label>Locality<select name="locality" id="c-locality"><option value="">Unknown</option></select></label>
+    <label>BHK<input name="bhk" type="number" min="1" max="10"></label>
+    <label>Area (sq ft)<input name="sqft" type="number" min="100"></label>
+    <label>Furnishing<select name="furnishing"><option value="semi-furnished">Semi-furnished</option><option value="furnished">Furnished</option><option value="unfurnished">Unfurnished</option></select></label>
+    <label>Rent asked (₹)<input name="rent" type="number" min="0"></label>
+    <label>Owner's phone<input name="phone" placeholder="optional"></label>
+    <label class="full">Listing photos<input name="photos" type="file" accept="image/*" multiple></label>
+    <button class="btn primary full">Analyze risk</button>
+  </form>
+  <div id="check-result"></div>
+  <details class="card report">
+    <summary>🚩 Got scammed or saw a fake listing? Report the number</summary>
+    <form id="report-form" class="form">
+      <label>Phone number<input name="phone" required></label>
+      <label class="full">What happened?<textarea name="reason" rows="2" required minlength="5"></textarea></label>
+      <button class="btn danger full">Report number</button>
+    </form>
+    <p class="muted small">Numbers are stored only as a salted hash. Also call <b>1930</b> or visit cybercrime.gov.in.</p>
+  </details>
+</section>
+
+<!-- ============ ACCOUNT ============ -->
+<section id="tab-account" class="tab narrow">
+  <div id="account-view"></div>
+</section>
+
+<!-- ============ ROOMMATES ============ -->
+<section id="tab-roommates" class="tab narrow">
+  <div id="rm-view"></div>
+</section>
+
+<!-- ============ BOOKING (tenant) ============ -->
+<section id="tab-booking" class="tab narrow">
+  <h2>My bookings</h2>
+  <div id="my-bookings"></div>
+  <form id="booking-lookup" class="card inline">
+    <input name="id" placeholder="Paste your booking ID" required>
+    <button class="btn primary">Open</button>
+  </form>
+  <div id="booking-view"></div>
+</section>
+
+<!-- ============ OWNER ============ -->
+<section id="tab-owner" class="tab">
+  <div id="owner-view"></div>
+</section>
+
+<!-- ============ ASK ============ -->
+<section id="tab-ask" class="tab narrow">
+  <h2>Ask the rental safety assistant</h2>
+  <p class="muted">Answers come only from a verified knowledge base, with sources.</p>
+  <div id="chat" class="card chat"></div>
+  <div class="chips" id="chips"></div>
+  <form id="ask-form" class="inline card"><input name="q" placeholder="e.g. Should I pay token before visiting?" required minlength="3"><button class="btn primary">Ask</button></form>
+</section>
+</main>
+
+<!-- listing detail / pay modal -->
+<div id="modal" class="modal hidden"><div class="modal-box"><div class="sheet-handle"></div><button class="close" aria-label="Close">×</button><div id="modal-body"></div></div></div>
+<div id="toast" class="toast hidden"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
