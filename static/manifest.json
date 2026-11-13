@@ -1,13 +1,13 @@
 {
-  "name": "Nestly · Rent safe. Live happy.",
-  "short_name": "Nestly",
+  "name": "GharSure · Rent safe. Live happy.",
+  "short_name": "GharSure",
   "description": "Safe flats direct from owners. AI scam check, visit booking, rent & bills.",
   "start_url": "/#explore",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f6f7fb",
-  "theme_color": "#ff385c",
+  "theme_color": "#6d4aff",
   "icons": [
     { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }

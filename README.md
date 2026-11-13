@@ -1,4 +1,4 @@
-# 🏡 Nestly AI: Rent safe. Live happy.
+# 🏡 GharSure AI: Rent safe. Live happy.
 
 **An AI-powered rental platform that catches fake listings and broker scams**, lets owners list flats directly (no broker),
 lets tenants book visits like a hotel, and manages rent, bills and deposits after move-in.
@@ -12,7 +12,7 @@ Students and job-seekers moving to a new city get scammed by fake PG/flat listin
 "too good to be true", the *"I'm an army officer, I'll courier the keys, just pay the token"* story, and fake brokers
 who disappear with the deposit. After moving in, rent, water and electricity bills and the deposit are tracked on paper or WhatsApp.
 
-## What Nestly does
+## What GharSure does
 | Feature | How it works |
 |---|---|
 | 🛡️ **AI scam detector** | Every listing gets a 0–100 risk score with clear reasons, built from 4 signals (below) |
@@ -31,7 +31,7 @@ who disappear with the deposit. After moving in, rent, water and electricity bil
 | 💬 **Safety assistant** | Retrieval (RAG) over a verified knowledge base; answers include their source |
 | 📱 **Installable app (PWA)** | Bottom tab bar, bottom-sheet details, "Add to Home Screen", works offline for the app shell |
 
-> **Nestly never holds money.** Payments go straight from tenant to owner via UPI. That keeps it legal (no payment
+> **GharSure never holds money.** Payments go straight from tenant to owner via UPI. That keeps it legal (no payment
 > licence needed) and is the core safety message of the app.
 
 ## Architecture

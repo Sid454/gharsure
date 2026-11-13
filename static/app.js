@@ -1,4 +1,4 @@
-// Nestly AI frontend: vanilla JS + Leaflet (OpenStreetMap)
+// GharSure AI frontend: vanilla JS + Leaflet (OpenStreetMap)
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -17,7 +17,7 @@ let exploreMap, pickMap, pickMarker;
 const markers = {};
 
 async function api(path, opts = {}) {
-  const session = store.get("nestly_session");
+  const session = store.get("gharsure_session");
   if (session) opts = { ...opts, headers: { ...(opts.headers || {}), Authorization: "Bearer " + session } };
   const res = await fetch(path, opts);
   let body = null;
@@ -106,7 +106,7 @@ async function init() {
 
 // ---------------- accounts & modes (Owner / Renter) ----------------
 let ME = null;
-const getMode = () => store.get("nestly_mode") || ME?.default_mode || "renter";
+const getMode = () => store.get("gharsure_mode") || ME?.default_mode || "renter";
 
 const TABS = {
   renter: [["explore", "Explore"], ["roommates", "Roommates"], ["booking", "My bookings"], ["check", "Scam check"], ["ask", "Ask AI"]],
@@ -128,21 +128,21 @@ function renderNav() {
 }
 
 $$("#mode-switch button").forEach((b) => (b.onclick = () => {
-  store.set("nestly_mode", b.dataset.mode);
+  store.set("gharsure_mode", b.dataset.mode);
   renderNav();
   const target = b.dataset.mode === "owner" ? "owner" : "explore";
   if (location.hash === "#" + target) route(); else location.hash = target;
 }));
 
 async function loadMe() {
-  if (!store.get("nestly_session")) { ME = null; return; }
-  try { ME = await api("/api/auth/me"); } catch { ME = null; store.set("nestly_session", null); }
+  if (!store.get("gharsure_session")) { ME = null; return; }
+  try { ME = await api("/api/auth/me"); } catch { ME = null; store.set("gharsure_session", null); }
 }
 
 async function signedIn(session, mode) {
-  store.set("nestly_session", session);
+  store.set("gharsure_session", session);
   await loadMe();
-  store.set("nestly_mode", mode || ME.default_mode);
+  store.set("gharsure_mode", mode || ME.default_mode);
   renderNav();
   toast(`Welcome, ${ME.name.split(" ")[0]}!`);
   location.hash = getMode() === "owner" ? "owner" : "explore";
@@ -152,7 +152,7 @@ function renderAccount() {
   const v = $("#account-view");
   if (!ME) {
     v.innerHTML = `<div class="authbox">
-      <div class="rm-hero"><h2>Welcome to nestly</h2><p>One account for everything: rent a flat, find roommates, or list your own flat as an owner.</p></div>
+      <div class="rm-hero"><h2>Welcome to GharSure</h2><p>One account for everything: rent a flat, find roommates, or list your own flat as an owner.</p></div>
       <div class="authtabs"><button class="btn primary" data-auth="signup">Create account</button><button class="btn" data-auth="login">Sign in</button></div>
       <form id="auth-form" class="card form"></form></div>`;
     const draw = (kind) => {
@@ -197,10 +197,10 @@ function renderAccount() {
       <a class="bookrow" href="#roommates"><span>👥 Roommate profile</span><span class="muted">${ME.roommate_token ? "Active" : "Create"} ›</span></a>
       <a class="bookrow" href="#ask"><span>💬 Rental safety assistant</span><span class="muted">›</span></a></div>
     <button class="btn" id="logout" style="width:100%">Sign out</button>`;
-  $$("[name=m]").forEach((r) => (r.onchange = () => { store.set("nestly_mode", r.value); renderNav(); }));
+  $$("[name=m]").forEach((r) => (r.onchange = () => { store.set("gharsure_mode", r.value); renderNav(); }));
   $("#logout").onclick = async () => {
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});
-    store.set("nestly_session", null); store.set("nestly_mode", null); ME = null;
+    store.set("gharsure_session", null); store.set("gharsure_mode", null); ME = null;
     renderNav(); location.hash = "explore"; toast("Signed out");
   };
 }
@@ -257,11 +257,12 @@ function dealText(l) {
 
 function cardHTML(l) {
   return `<div class="lcard" data-id="${l.id}">
-    <div class="img" style="background-image:url('${esc(l.photos[0] || "")}')"><span class="badge ${l.safety.level}">${LEVEL[l.safety.level]}</span></div>
+    <div class="img"><div class="ph" style="background-image:url('${esc(l.photos[0] || "")}')"></div><span class="badge ${l.safety.level}">${LEVEL[l.safety.level]}</span>
+      <span class="pricechip">${inr(l.rent)} <small>/ month</small></span></div>
     <div class="body">
       <div class="title">${esc(l.title)}</div>
       <div class="muted small">${esc(l.locality)}, ${esc(l.city)} · ${l.bhk} BHK · ${l.sqft} sq ft · ${esc(l.furnishing)}</div>
-      <div class="price">${inr(l.rent)} <small>/ month</small></div>${dealText(l)}
+      ${dealText(l)}
     </div></div>`;
 }
 
@@ -424,7 +425,7 @@ const KIND = { rent: "🏠 Rent", water: "💧 Water", electricity: "⚡ Electri
 async function loadTenantBills(bookingId) {
   const d = await api(`/api/tenancy/${encodeURIComponent(bookingId)}`);
   $("#bills-view").innerHTML = `<div class="card"><h3>Rent & bills</h3>
-    <div class="muted small">Pay directly to your owner's UPI (${esc(d.tenancy.owner_upi)}). Nestly never holds your money.</div>
+    <div class="muted small">Pay directly to your owner's UPI (${esc(d.tenancy.owner_upi)}). GharSure never holds your money.</div>
     ${summaryHTML(d.summary)}
     <div class="tablewrap"><table><tr><th>Bill</th><th>Period</th><th>Amount</th><th>Due</th><th>Status</th><th></th></tr>
     ${d.bills.map((b) => `<tr><td>${KIND[b.kind]}<div class="small muted mobile-only">${esc(b.period)}</div>${b.note ? `<div class="small muted">${esc(b.note)}</div>` : ""}</td><td>${esc(b.period)}</td><td><b>${inr(b.amount)}</b></td><td>${esc(b.due_date)}</td><td>${billStatus(b)}</td>
@@ -699,7 +700,7 @@ function rmDashboard(token, d) {
         <button class="btn sm" id="rm-pause">${d.me.active ? "⏸ Hide my profile" : "▶️ Show my profile"}</button></div></div>
     ${d.incoming.length ? `<h3>📩 Requests for you</h3>${d.incoming.map((m) => rmCardHTML(m, token, true)).join("")}` : ""}
     <h3>✨ Best matches</h3>
-    ${top.length ? top.map((m) => rmCardHTML(m, token)).join("") : `<div class="card muted">No matches yet in ${esc(d.me.city)}. Share Nestly with your college friends!</div>`}
+    ${top.length ? top.map((m) => rmCardHTML(m, token)).join("") : `<div class="card muted">No matches yet in ${esc(d.me.city)}. Share GharSure with your college friends!</div>`}
     <p class="small muted">Your profile link (keep it private): <span class="copy">${esc(location.origin)}/#roommates=${esc(token)}</span></p>`;
   $("#rm-edit").onclick = () => rmForm(d.me, token);
   $("#rm-pause").onclick = (e) => busy(e.target, async () => { await postJSON(`/api/roommates/${T}/active`, { active: !d.me.active }); loadRoommates(token); });

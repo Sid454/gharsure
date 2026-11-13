@@ -1,6 +1,6 @@
 """Rent & bills: deposit tracking, bills raised by the owner, direct UPI payment to the owner.
 
-Nestly never holds money. The tenant pays the owner's own UPI ID (UPI deep link / QR),
+GharSure never holds money. The tenant pays the owner's own UPI ID (UPI deep link / QR),
 enters the UTR reference, and the owner confirms receipt. Everything is kept as a ledger.
 """
 import io

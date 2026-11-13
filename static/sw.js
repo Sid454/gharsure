@@ -1,5 +1,5 @@
 // Service worker: app shell works offline; API data is always fetched fresh (network-first).
-const CACHE = "nestly-v4";
+const CACHE = "gharsure-v1";
 const SHELL = ["/", "/static/style.css", "/static/app.js", "/static/manifest.json", "/static/icons/icon-192.png"];
 
 self.addEventListener("install", (e) => {

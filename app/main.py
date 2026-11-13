@@ -1,4 +1,4 @@
-"""Nestly (RentShield AI engine) - FastAPI backend.
+"""GharSure (RentShield AI engine) - FastAPI backend.
 
 Owners list flats directly, tenants browse a map / cards and book visits like a hotel,
 and every listing passes through the AI scam-risk engine.
@@ -53,7 +53,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="Nestly API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="GharSure API", version="0.1.0", lifespan=lifespan)
 app.include_router(tenancy.router)
 app.include_router(roommates.router)
 app.include_router(auth.router)

@@ -3,22 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Nestly · Rent safe. Live happy.</title>
-<meta name="theme-color" content="#ff385c">
+<title>GharSure · Rent safe. Live happy.</title>
+<meta name="theme-color" content="#6d4aff">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Nestly">
+<meta name="apple-mobile-web-app-title" content="GharSure">
 <link rel="manifest" href="/static/manifest.json">
 <link rel="icon" href="/static/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="#explore"><span class="logo">🏡</span>nestly<span class="ai">AI</span></a>
+  <a class="brand" href="#explore">GharSure<span class="ai">AI</span></a>
   <nav id="nav"></nav>
   <div class="acct">
     <div id="mode-switch" class="modeswitch hidden"><button data-mode="renter">🔑 Renter</button><button data-mode="owner">🏠 Owner</button></div>
@@ -34,8 +37,9 @@
 <!-- ============ EXPLORE ============ -->
 <section id="tab-explore" class="tab">
   <div class="hero">
-    <h1>Find a vacant flat. Book a visit. Deal directly with the owner.</h1>
-    <p>Every listing is checked by AI for stolen photos, fake prices and scam messages.</p>
+    <h1>Find a home you can <em>trust</em>. Deal directly with the owner.</h1>
+    <p>Every listing is checked by AI for stolen photos, fake prices and scam messages, before you ever pay a rupee.</p>
+    <div class="trust"><span>🛡️ AI-verified listings</span><span>🤝 Zero brokerage</span><span>📅 Book visits like a hotel</span><span>👥 Roommate matching</span></div>
     <form id="search" class="searchbar">
       <label>City<select name="city" id="f-city"><option value="">All cities</option></select></label>
       <label>Max rent<input name="max_rent" type="number" min="0" step="1000" placeholder="₹ any"></label>
