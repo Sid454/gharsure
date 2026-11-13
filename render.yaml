@@ -1,0 +1,14 @@
+# Render Blueprint: one free web service (https://render.com/docs/blueprint-spec)
+services:
+  - type: web
+    name: nestly-ai
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python setup.py build_ext --inplace
+    startCommand: bash scripts/start.sh
+    healthCheckPath: /api/meta
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: RENTSHIELD_PHONE_SALT
+        generateValue: true
