@@ -22,6 +22,7 @@ namespace {
 
 constexpr int kPhashSize = 32;  // input image is 32x32 grayscale
 constexpr int kLowFreq = 8;     // keep the 8x8 low-frequency DCT block
+constexpr double kPi = 3.14159265358979323846;
 
 // Precomputed DCT-II cosine table: cos[(2x+1) * u * pi / (2N)]
 struct DctTable {
@@ -29,7 +30,7 @@ struct DctTable {
     DctTable() {
         for (int u = 0; u < kLowFreq; ++u)
             for (int x = 0; x < kPhashSize; ++x)
-                c[u][x] = std::cos((2.0 * x + 1.0) * u * M_PI / (2.0 * kPhashSize));
+                c[u][x] = std::cos((2.0 * x + 1.0) * u * kPi / (2.0 * kPhashSize));
     }
 };
 const DctTable kDct;
