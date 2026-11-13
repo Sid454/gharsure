@@ -37,9 +37,9 @@
 <!-- ============ EXPLORE ============ -->
 <section id="tab-explore" class="tab">
   <div class="hero">
-    <h1>Find a home you can <em>trust</em>. Deal directly with the owner.</h1>
-    <p>Every listing is checked by AI for stolen photos, fake prices and scam messages, before you ever pay a rupee.</p>
-    <div class="trust"><span>🛡️ AI-verified listings</span><span>🤝 Zero brokerage</span><span>📅 Book visits like a hotel</span><span>👥 Roommate matching</span></div>
+    <span class="eyebrow"><i></i>AI-verified rentals · zero brokerage</span>
+    <h1>Find a home you can <em>trust</em>.</h1>
+    <p>Flats straight from owners and roommates who match your vibe. Our AI checks every listing before you pay a rupee.</p>
     <form id="search" class="searchbar">
       <label>City<select name="city" id="f-city"><option value="">All cities</option></select></label>
       <label>Max rent<input name="max_rent" type="number" min="0" step="1000" placeholder="₹ any"></label>
@@ -48,24 +48,51 @@
       <button class="btn primary">Search</button>
     </form>
   </div>
+  <div class="quick">
+    <a href="#post=vacating"><b>🚪</b><span>Leaving your flat?<small>Help the next tenant find it</small></span><em>→</em></a>
+    <a href="#post=flatmate"><b>🧑‍🤝‍🧑</b><span>Need a flatmate?<small>Post your spare room</small></span><em>→</em></a>
+    <a href="#check"><b>🛡️</b><span>Found a flat elsewhere?<small>Check it for scams in seconds</small></span><em>→</em></a>
+  </div>
+  <div class="listhead"><div class="kindtabs" id="kindtabs">
+    <button data-kind="" class="on">All homes</button><button data-kind="owner">🏠 From owners</button>
+    <button data-kind="vacating">🚪 Tenant leaving</button><button data-kind="flatmate">🧑‍🤝‍🧑 Flatmate wanted</button>
+  </div><div id="result-count" class="muted small"></div></div>
   <div class="explore">
-    <div><div id="result-count" class="muted"></div><div id="cards" class="cards"></div></div>
+    <div><div id="cards" class="cards"></div></div>
     <div class="mapwrap"><div id="map"></div></div>
   </div>
 </section>
 
 <!-- ============ POST ============ -->
 <section id="tab-post" class="tab narrow">
-  <h2>List your flat, free</h2>
-  <p class="muted">Tenants contact you directly, no broker. Your number stays hidden until you accept a visit request.</p>
+  <h2 id="post-heading">List your flat, free</h2>
+  <p class="muted" id="post-sub">Tenants contact you directly, no broker. Your number stays hidden until you accept a visit request.</p>
+  <div class="rolepick kindpick" id="kindpick">
+    <label><input type="radio" name="kindpick" value="owner" checked><span>🏠</span>I'm the owner<small>Rent out my flat</small></label>
+    <label><input type="radio" name="kindpick" value="vacating"><span>🚪</span>I'm leaving my flat<small>Help the next tenant</small></label>
+    <label><input type="radio" name="kindpick" value="flatmate"><span>🧑‍🤝‍🧑</span>Need a flatmate<small>Share my current flat</small></label>
+  </div>
   <form id="post-form" class="card form">
+    <input type="hidden" name="kind" id="p-kind" value="owner">
     <label class="full">Title<input name="title" required minlength="5" maxlength="120" placeholder="e.g. Sunny 2BHK near metro"></label>
     <label>City<select name="city" id="p-city" required></select></label>
     <label>Locality<select name="locality" id="p-locality" required></select></label>
     <label>BHK<input name="bhk" type="number" min="1" max="10" value="2" required></label>
     <label>Area (sq ft)<input name="sqft" type="number" min="100" value="900" required></label>
     <label>Furnishing<select name="furnishing"><option value="semi-furnished">Semi-furnished</option><option value="furnished">Furnished</option><option value="unfurnished">Unfurnished</option></select></label>
-    <label>Monthly rent (₹)<input name="rent" type="number" min="500" required></label>
+    <label><span id="rent-label">Monthly rent (₹)</span><input name="rent" type="number" min="500" required></label>
+    <label class="k-vacating k-flatmate hidden"><span id="from-label">Free from</span><input name="available_from" type="date" id="p-from"></label>
+    <label class="k-flatmate hidden">New flatmate pays (₹ / month)<input name="rent_share" type="number" min="500" id="p-share"></label>
+    <label class="k-flatmate hidden">People needed<select name="spots"><option>1</option><option>2</option><option>3</option></select></label>
+    <label class="k-flatmate k-vacating hidden">Preferred<select name="pref_gender"><option value="any">Anyone</option><option value="male">Male</option><option value="female">Female</option></select></label>
+    <div class="full k-vacating hidden notice small">
+      <b>Owner's contact (optional).</b> Share it only if your owner has said it's OK. Renters see it only after you accept their visit request.
+      <div class="form" style="margin-top:10px">
+        <label>Owner's name<input name="owner_contact_name"></label>
+        <label>Owner's phone<input name="owner_contact_phone" placeholder="10-digit mobile"></label>
+        <label class="full" style="flex-direction:row;gap:8px;align-items:center;font-weight:600"><input type="checkbox" name="owner_consent" value="true" style="width:auto"> My owner agreed to share this number</label>
+      </div>
+    </div>
     <label class="full">Description<textarea name="description" rows="4" required minlength="10" placeholder="Amenities, rules, when tenants can visit…"></textarea></label>
     <label>Your name<input name="owner_name" required minlength="2"></label>
     <label>Phone<input name="owner_phone" required pattern="[0-9 +\-]{10,15}" placeholder="10-digit mobile"></label>
@@ -140,10 +167,12 @@
   <form id="ask-form" class="inline card"><input name="q" placeholder="e.g. Should I pay token before visiting?" required minlength="3"><button class="btn primary">Ask</button></form>
 </section>
 </main>
+<footer class="sitefoot"><span>© GharSure · Rent safe. Live happy.</span><a href="/privacy">Privacy &amp; Terms</a><a href="https://github.com/Sid454/gharsure" target="_blank" rel="noopener">GitHub</a><span>Scammed? Call <b>1930</b></span></footer>
 
 <!-- listing detail / pay modal -->
 <div id="modal" class="modal hidden"><div class="modal-box"><div class="sheet-handle"></div><button class="close" aria-label="Close">×</button><div id="modal-body"></div></div></div>
 <div id="toast" class="toast hidden"></div>
+<a href="#ask" class="aifab" id="aifab" aria-label="Ask the rental safety AI"><span>✨</span><b>Ask AI</b></a>
 
 <script src="/static/app.js"></script>
 </body>

@@ -130,3 +130,19 @@ tests/test_app.py         End-to-end tests
 - **No payment gateway, by design.** UPI goes directly to the owner; a Razorpay Route integration could be added later.
 - Listing photos come only from owners on the platform. Collect any external reference photos only from public pages,
   following each site's terms and robots.txt.
+
+## New in v2
+| Feature | Details |
+|---|---|
+| 🚪 **Tenant leaving** | A tenant moving out posts their flat for the next tenant (free-from date). The real owner's number can be shared, only with the owner's consent and only after a visit is accepted |
+| 🧑‍🤝‍🧑 **Flatmate wanted** | Someone who already lives in a flat posts their spare room: per-person rent, spots, gender preference |
+| 🗄️ **Permanent storage** | Set `DATABASE_URL` (e.g. free Supabase Postgres) and listings, accounts, bills **and photos** are stored permanently. Without it, the app runs in demo mode on SQLite. The same tests pass on both |
+| 🔒 **Privacy & Terms** | `/privacy` page in plain language (DPDP Act 2023 rights, how phone numbers are shared) |
+| 🎨 **Premium UI** | Calm layout, quick-action tiles, type filters, loading skeletons, floating ✨ Ask AI button |
+| 📣 **Marketing kit** | `python -m scripts.make_marketing_kit <live-url>` → A4 QR poster + WhatsApp / LinkedIn / Instagram text in `marketing/` |
+
+### Run the tests on PostgreSQL
+```bash
+TEST_DATABASE_URL=postgresql://user@localhost:5432/throwaway_db .venv/bin/python -m pytest -q
+```
+⚠️ `TEST_DATABASE_URL` is **wiped** before the tests. Never point it at a real database.

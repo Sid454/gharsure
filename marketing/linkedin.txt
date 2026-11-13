@@ -1,0 +1,19 @@
+I built GharSure, an AI platform that protects students from rental scams. 🏡
+
+The problem: every year, students moving to a new city lose token money to fake flat listings: stolen photos, "too good to be true" rent, and the classic "I'm an army officer, I'll courier the keys" story.
+
+What GharSure does:
+🛡️ A C++ perceptual-hashing engine detects stolen listing photos, even after cropping, filters or watermarks
+🤖 ML models flag rents far below the area's fair price and scam-style messages (English + Hinglish), with an explainable 0–100 risk score
+🏠 Owners list directly (no broker); renters browse a map and book visits like a hotel
+👥 Roommate matching with a compatibility score and the reasons behind it
+🧾 Rent, bills and deposits tracked in one place, paid directly to the owner's UPI
+
+Tech: C++20 + pybind11, Python, FastAPI, scikit-learn, PostgreSQL, Leaflet maps, installable PWA.
+
+🔗 Live: https://gharsure.onrender.com
+💻 Code: https://github.com/Sid454/gharsure
+
+Feedback welcome, and if you're a student hunting for a flat, try it and tell me what's missing!
+
+#FinalYearProject #MachineLearning #Python #CPP #FastAPI #StudentProject #PropTech

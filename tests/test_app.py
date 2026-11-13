@@ -10,6 +10,17 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 os.environ["RENTSHIELD_DATA"] = tempfile.mkdtemp(prefix="rentshield-test-")
 
+# Postgres runs need a throwaway database: TEST_DATABASE_URL is wiped before the tests.
+# (Never point this at a real database.)
+if os.environ.get("TEST_DATABASE_URL"):
+    import psycopg
+
+    with psycopg.connect(os.environ["TEST_DATABASE_URL"], autocommit=True) as _c:
+        _c.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+    os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
+else:
+    os.environ.pop("DATABASE_URL", None)  # default: fresh SQLite file
+
 import pytest  # noqa: E402
 import rentshield_core as core  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -188,3 +199,41 @@ def test_accounts_owner_and_renter_modes(client):
     assert len(client.get("/api/auth/me", headers=h).json()["bookings"]) == 1
     client.post("/api/auth/logout", headers=h)
     assert client.get("/api/auth/me", headers=h).status_code == 401
+
+
+def test_tenant_leaving_and_flatmate_posts(client):
+    base = {"city": "Pune", "locality": "Baner", "bhk": 2, "sqft": 1000, "furnishing": "semi-furnished",
+            "rent": 30000, "owner_name": "Tenant Tara", "owner_phone": "9333300001", "lat": 18.56, "lng": 73.78,
+            "description": "Moving out next month, lovely flat. Visit any evening."}
+    photo = lambda s: [("photos", ("a.jpg", jpeg(room_photo(s)), "image/jpeg"))]  # noqa: E731
+
+    # vacating needs a date, and the owner's number only with consent
+    assert client.post("/api/listings", data={**base, "title": "Leaving my flat", "kind": "vacating"},
+                       files=photo(60)).status_code == 400
+    assert client.post("/api/listings", data={**base, "title": "Leaving my flat", "kind": "vacating",
+                                              "available_from": "2026-12-01", "owner_contact_phone": "9444400001"},
+                       files=photo(61)).status_code == 400
+    v = client.post("/api/listings", data={**base, "title": "Leaving my flat", "kind": "vacating",
+                                           "available_from": "2026-12-01", "owner_contact_name": "Mr. Rao",
+                                           "owner_contact_phone": "9444400001", "owner_consent": "true"},
+                    files=photo(62)).json()
+    pub = client.get(f"/api/listings/{v['id']}").json()
+    assert pub["kind"] == "vacating" and pub["owner_contact_shared"] and "owner_contact_phone" not in pub
+
+    b = client.post("/api/bookings", json={"listing_id": v["id"], "name": "Next Tenant", "phone": "9555500001",
+                                           "visit_date": date.today().isoformat(),
+                                           "move_in_date": "2026-12-01", "occupants": 1}).json()
+    assert "property_owner" not in client.get(f"/api/bookings/{b['booking_id']}").json()
+    client.post(f"/api/owner/{v['owner_token']}/bookings/{b['booking_id']}", json={"status": "accepted"})
+    got = client.get(f"/api/bookings/{b['booking_id']}").json()
+    assert got["owner"]["phone"] == "9333300001" and got["property_owner"]["phone"] == "9444400001"
+
+    # flatmate: share must be given and can't exceed the rent
+    assert client.post("/api/listings", data={**base, "title": "Need a flatmate", "kind": "flatmate"},
+                       files=photo(63)).status_code == 400
+    assert client.post("/api/listings", data={**base, "title": "Need a flatmate", "kind": "flatmate",
+                                              "rent_share": 40000}, files=photo(64)).status_code == 400
+    f = client.post("/api/listings", data={**base, "title": "Need a flatmate", "kind": "flatmate", "rent_share": 15000,
+                                           "spots": 2, "pref_gender": "female"}, files=photo(65)).json()
+    only = client.get("/api/listings", params={"kind": "flatmate"}).json()
+    assert [l["id"] for l in only] == [f["id"]] and only[0]["rent_share"] == 15000 and only[0]["spots"] == 2

@@ -5,12 +5,13 @@ and every listing passes through the AI scam-risk engine.
 """
 import io
 import json
+import os
 import secrets
 from contextlib import asynccontextmanager
 from datetime import date
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 from pydantic import BaseModel, Field, field_validator
@@ -22,6 +23,8 @@ from .risk import ListingInput, analyze
 from .text_model import MODEL_PATH as TEXT_MODEL, ScamTextModel
 
 MAX_PHOTOS = 6
+LISTING_KINDS = {"owner", "vacating", "flatmate"}
+DEMO_MODE = os.environ.get("GHARSURE_DEMO", "0") == "1"
 MAX_PHOTO_BYTES = 8 * 1024 * 1024
 FURNISHING = {"unfurnished", "semi-furnished", "furnished"}
 STATE: dict = {}
@@ -51,14 +54,13 @@ async def lifespan(_: FastAPI):
     load_models()
     rebuild_index()
     yield
+    db.close()
 
 
 app = FastAPI(title="GharSure API", version="0.1.0", lifespan=lifespan)
 app.include_router(tenancy.router)
 app.include_router(roommates.router)
 app.include_router(auth.router)
-db.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=db.UPLOAD_DIR), name="uploads")
 app.mount("/static", StaticFiles(directory=db.ROOT / "static"), name="static")
 
 
@@ -83,11 +85,11 @@ async def read_photos(photos: list[UploadFile] | None) -> list[bytes]:
 
 def save_photo(data: bytes, listing_id: str, n: int) -> str:
     """Re-encode as JPEG: strips EXIF (GPS!) and anything that isn't image data."""
-    folder = db.UPLOAD_DIR / listing_id
-    folder.mkdir(parents=True, exist_ok=True)
     img = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
     img.thumbnail((1600, 1600))
-    img.save(folder / f"{n}.jpg", "JPEG", quality=85)
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=82, optimize=True, progressive=True)
+    db.save_photo_bytes(listing_id, n, buf.getvalue())   # stored in the database, survives restarts
     return f"/uploads/{listing_id}/{n}.jpg"
 
 
@@ -108,6 +110,9 @@ def public_listing(row) -> dict:
         "description": row["description"], "owner_name": row["owner_name"].split()[0],
         "lat": row["lat"], "lng": row["lng"], "available": bool(row["available"]),
         "photos": listing_photos(row["id"]), "created_at": row["created_at"],
+        "kind": row["kind"], "available_from": row["available_from"], "spots": row["spots"],
+        "pref_gender": row["pref_gender"], "rent_share": row["rent_share"],
+        "owner_contact_shared": bool(row["owner_contact_phone"]),
         "safety": {"score": row["risk_score"], "level": row["risk_level"],
                    "verified": row["risk_level"] == "low",
                    "fair_rent": (risk.get("price") or {}).get("fair_rent")},
@@ -143,6 +148,26 @@ def index():
     return FileResponse(db.ROOT / "static" / "index.html")
 
 
+@app.get("/uploads/{listing_id}/{n}.jpg", include_in_schema=False)
+def photo(listing_id: str, n: int):
+    data = db.load_photo_bytes(listing_id, n)
+    if data is None:
+        raise HTTPException(404, "Photo not found")
+    return Response(data, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=604800, immutable"})
+
+
+@app.get("/privacy", include_in_schema=False)
+def privacy():
+    return FileResponse(db.ROOT / "static" / "legal.html")
+
+
+@app.get("/api/health", include_in_schema=False)
+def health():
+    with db.connect() as con:
+        con.execute("SELECT 1").fetchone()
+    return {"ok": True, "database": db.backend(), "demo": DEMO_MODE}
+
+
 @app.get("/sw.js", include_in_schema=False)
 def service_worker():
     # Served from the root so it can control the whole app
@@ -172,9 +197,11 @@ def stats():
 
 @app.get("/api/listings")
 def list_listings(city: str | None = None, max_rent: int | None = None, bhk: int | None = None,
-                  vacant_only: bool = True, sort: str = "newest"):
+                  vacant_only: bool = True, sort: str = "newest", kind: str | None = None):
     sql = "SELECT * FROM listings WHERE risk_level != 'high'"
     args: list = []
+    if kind in LISTING_KINDS:
+        sql += " AND kind = ?"; args.append(kind)
     if city:
         sql += " AND city = ?"; args.append(city)
     if max_rent:
@@ -209,9 +236,33 @@ async def create_listing(
     owner_name: str = Form(..., min_length=2, max_length=80), owner_phone: str = Form(...),
     lat: float = Form(..., ge=-90, le=90), lng: float = Form(..., ge=-180, le=180),
     photos: list[UploadFile] | None = File(None),
+    kind: str = Form("owner"),
+    available_from: date | None = Form(None),
+    spots: int = Form(1, ge=1, le=6),
+    pref_gender: str = Form("any"),
+    rent_share: int | None = Form(None, ge=500, le=2_000_000),
+    owner_contact_name: str = Form("", max_length=80),
+    owner_contact_phone: str = Form(""),
+    owner_consent: bool = Form(False),
     authorization: str | None = Header(None),
 ):
     check_city(city, locality)
+    if kind not in LISTING_KINDS:
+        raise HTTPException(400, "Invalid listing type")
+    if pref_gender not in {"any", "male", "female"}:
+        raise HTTPException(400, "Invalid gender preference")
+    if kind == "vacating" and not available_from:
+        raise HTTPException(400, "Tell renters the date the flat becomes free")
+    if kind == "flatmate":
+        if not rent_share:
+            raise HTTPException(400, "Enter the rent the new flatmate will pay")
+        if rent_share > rent:
+            raise HTTPException(400, "The flatmate's share can't be more than the total rent")
+    contact_phone = None
+    if kind == "vacating" and owner_contact_phone.strip():
+        if not owner_consent:
+            raise HTTPException(400, "Only share the owner's number if they agreed to it")
+        contact_phone = valid_phone(owner_contact_phone)
     if furnishing not in FURNISHING:
         raise HTTPException(400, "Invalid furnishing")
     phone = valid_phone(owner_phone)
@@ -228,10 +279,14 @@ async def create_listing(
     with db.connect() as con:
         con.execute(
             "INSERT INTO listings (id, title, city, locality, bhk, sqft, furnishing, rent, description, owner_name,"
-            " owner_phone, owner_token, lat, lng, risk_score, risk_level, risk_json)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " owner_phone, owner_token, lat, lng, risk_score, risk_level, risk_json, kind, available_from, spots,"
+            " pref_gender, rent_share, owner_contact_name, owner_contact_phone)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (listing_id, title.strip(), city, locality, bhk, sqft, furnishing, rent, description.strip(),
-             owner_name.strip(), phone, token, lat, lng, risk["score"], risk["level"], json.dumps(risk)))
+             owner_name.strip(), phone, token, lat, lng, risk["score"], risk["level"], json.dumps(risk),
+             kind, available_from.isoformat() if available_from else None, spots if kind == "flatmate" else 1,
+             pref_gender, rent_share if kind == "flatmate" else None,
+             owner_contact_name.strip() if contact_phone else None, contact_phone))
     # Index photos AFTER the check, so future listings reusing them get caught.
     for n, data in enumerate(images):
         path = save_photo(data, listing_id, n)
@@ -288,18 +343,23 @@ def create_booking(b: BookingIn, authorization: str | None = Header(None)):
 def get_booking(booking_id: str):
     with db.connect() as con:
         row = con.execute(
-            "SELECT b.*, l.title, l.locality, l.city, l.rent, l.owner_name, l.owner_phone, l.lat, l.lng"
+            "SELECT b.*, l.title, l.locality, l.city, l.rent, l.owner_name, l.owner_phone, l.lat, l.lng,"
+            " l.kind, l.rent_share, l.owner_contact_name, l.owner_contact_phone"
             " FROM bookings b JOIN listings l ON l.id = b.listing_id WHERE b.id = ?", (booking_id,)).fetchone()
     if not row:
         raise HTTPException(404, "Booking not found")
     out = {k: row[k] for k in ("id", "listing_id", "title", "locality", "city", "rent", "visit_date",
-                               "move_in_date", "occupants", "status", "owner_note", "created_at")}
+                               "move_in_date", "occupants", "status", "owner_note", "created_at",
+                               "kind", "rent_share")}
     with db.connect() as con:
         out["moved_in"] = con.execute("SELECT 1 FROM tenancies WHERE booking_id = ?", (booking_id,)).fetchone() is not None
     if row["status"] == "accepted":  # connect directly only once the owner accepts
         out["owner"] = {"name": row["owner_name"], "phone": row["owner_phone"],
                         "whatsapp": f"https://wa.me/91{row['owner_phone']}",
                         "lat": row["lat"], "lng": row["lng"]}
+        if row["owner_contact_phone"]:  # tenant leaving: real owner's number, shared with their consent
+            out["property_owner"] = {"name": row["owner_contact_name"] or "Owner", "phone": row["owner_contact_phone"],
+                                     "whatsapp": f"https://wa.me/91{row['owner_contact_phone']}"}
     return out
 
 

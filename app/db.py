@@ -1,4 +1,11 @@
-"""SQLite storage for listings, photo fingerprints, scam reports and inquiries."""
+"""Storage layer. Same code runs on two databases:
+
+- SQLite  (default): local development and the demo (file in data/).
+- PostgreSQL (when DATABASE_URL is set): production, e.g. a free Supabase/Neon database,
+  so listings, accounts, bills and PHOTOS survive server restarts.
+
+App code writes SQLite-style SQL with `?` placeholders; for Postgres it is translated here.
+"""
 import hashlib
 import json
 import os
@@ -9,7 +16,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("RENTSHIELD_DATA", ROOT / "data"))
 DB_PATH = DATA_DIR / "rentshield.db"
-UPLOAD_DIR = DATA_DIR / "uploads"
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+IS_POSTGRES = DATABASE_URL.startswith(("postgres://", "postgresql://"))
 PHONE_SALT = os.environ.get("RENTSHIELD_PHONE_SALT", "rentshield-dev-salt")
 
 SCHEMA = """
@@ -33,6 +41,12 @@ CREATE TABLE IF NOT EXISTS listings (
     risk_level TEXT NOT NULL,
     risk_json TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS photos (
+    listing_id TEXT NOT NULL,
+    n INTEGER NOT NULL,
+    data BLOB NOT NULL,                      -- re-encoded JPEG (EXIF stripped)
+    PRIMARY KEY (listing_id, n)
 );
 CREATE TABLE IF NOT EXISTS fingerprints (
     image_id TEXT PRIMARY KEY,
@@ -129,18 +143,99 @@ CREATE TABLE IF NOT EXISTS bills (
     confirmed_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_listings_owner ON listings (owner_token);
+CREATE INDEX IF NOT EXISTS idx_listings_city ON listings (city, available);
+CREATE INDEX IF NOT EXISTS idx_bookings_listing ON bookings (listing_id);
+CREATE INDEX IF NOT EXISTS idx_bills_tenancy ON bills (tenancy_id);
+CREATE INDEX IF NOT EXISTS idx_reports_phone ON reports (phone_hash);
 """
+
+# ---------- SQLite -> PostgreSQL translation ----------
+PG_NOW = "to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"
+
+
+def _pg_sql(sql: str) -> str:
+    return sql.replace("%", "%%").replace("?", "%s").replace("datetime('now')", PG_NOW)
+
+
+def _pg_schema(schema: str) -> str:
+    return (schema.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+                  .replace(" REAL ", " DOUBLE PRECISION ").replace(" BLOB ", " BYTEA ")
+                  .replace("DEFAULT (datetime('now'))", f"DEFAULT ({PG_NOW})"))
+
+
+class Row(dict):
+    """dict that also supports row[0], like sqlite3.Row."""
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return super().__getitem__(key)
+
+
+class _PgConnection:
+    """Wraps a psycopg connection so app code can keep using `?` and con.execute(...)."""
+
+    def __init__(self, con):
+        self._con = con
+
+    def execute(self, sql: str, params=()):
+        return self._con.execute(_pg_sql(sql), tuple(params))
+
+    def executescript(self, script: str):
+        self._con.execute(script)
+
+
+_pool = None
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        from psycopg.rows import dict_row
+        from psycopg_pool import ConnectionPool
+
+        def row_factory(cursor):
+            make = dict_row(cursor)
+            return lambda values: Row(make(values))
+
+        # prepare_threshold=None keeps it compatible with PgBouncer / Supabase's pooler
+        _pool = ConnectionPool(DATABASE_URL, min_size=1, max_size=int(os.environ.get("DB_POOL_SIZE", "5")),
+                               kwargs={"row_factory": row_factory, "prepare_threshold": None}, open=True)
+    return _pool
+
+
+# Columns added after the first release. Applied on startup, so old databases upgrade in place.
+MIGRATIONS = [
+    ("listings", "kind", "TEXT NOT NULL DEFAULT 'owner'"),       # owner / vacating (tenant leaving) / flatmate
+    ("listings", "available_from", "TEXT"),
+    ("listings", "spots", "INTEGER NOT NULL DEFAULT 1"),         # flatmate: how many people wanted
+    ("listings", "pref_gender", "TEXT NOT NULL DEFAULT 'any'"),
+    ("listings", "rent_share", "INTEGER"),                       # flatmate: rent per new person
+    ("listings", "owner_contact_name", "TEXT"),                  # vacating: real owner, only with consent
+    ("listings", "owner_contact_phone", "TEXT"),
+]
 
 
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     with connect() as con:
-        con.executescript(SCHEMA)
+        con.executescript(_pg_schema(SCHEMA) if IS_POSTGRES else SCHEMA)
+        for table, column, decl in MIGRATIONS:
+            if IS_POSTGRES:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {decl}")
+            else:
+                existing = {r["name"] for r in con.execute(f"PRAGMA table_info({table})").fetchall()}
+                if column not in existing:
+                    con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 
 @contextmanager
 def connect():
+    if IS_POSTGRES:
+        with _get_pool().connection() as pg:   # commits on success, rolls back on error
+            yield _PgConnection(pg)
+        return
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     try:
@@ -149,6 +244,12 @@ def connect():
     finally:
         con.close()
 
+
+def backend() -> str:
+    return "postgres" if IS_POSTGRES else "sqlite"
+
+
+# ---------- helpers ----------
 
 def normalize_phone(phone: str) -> str:
     digits = "".join(ch for ch in phone if ch.isdigit())
@@ -164,8 +265,8 @@ def count_reports(phone: str) -> int:
     if not normalize_phone(phone):
         return 0
     with connect() as con:
-        row = con.execute("SELECT COUNT(*) FROM reports WHERE phone_hash = ?", (hash_phone(phone),)).fetchone()
-    return row[0]
+        row = con.execute("SELECT COUNT(*) AS n FROM reports WHERE phone_hash = ?", (hash_phone(phone),)).fetchone()
+    return row["n"]
 
 
 def add_report(phone: str, reason: str, listing_id: str | None = None) -> None:
@@ -179,7 +280,10 @@ def add_report(phone: str, reason: str, listing_id: str | None = None) -> None:
 def save_fingerprint(image_id, listing_id, source, city, path, phashes, dhashes) -> None:
     with connect() as con:
         con.execute(
-            "INSERT OR REPLACE INTO fingerprints VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO fingerprints (image_id, listing_id, source, city, path, phashes, dhashes)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (image_id) DO UPDATE SET"
+            " listing_id = excluded.listing_id, source = excluded.source, city = excluded.city,"
+            " path = excluded.path, phashes = excluded.phashes, dhashes = excluded.dhashes",
             (image_id, listing_id, source, city, path,
              json.dumps([str(h) for h in phashes]), json.dumps([str(h) for h in dhashes])),
         )
@@ -200,3 +304,23 @@ def fingerprint_meta(image_id: str):
             "LEFT JOIN listings l ON l.id = f.listing_id WHERE f.image_id = ?",
             (image_id,),
         ).fetchone()
+
+
+def save_photo_bytes(listing_id: str, n: int, data: bytes) -> None:
+    with connect() as con:
+        con.execute("INSERT INTO photos (listing_id, n, data) VALUES (?, ?, ?)"
+                    " ON CONFLICT (listing_id, n) DO UPDATE SET data = excluded.data", (listing_id, n, data))
+
+
+def load_photo_bytes(listing_id: str, n: int) -> bytes | None:
+    with connect() as con:
+        row = con.execute("SELECT data FROM photos WHERE listing_id = ? AND n = ?", (listing_id, n)).fetchone()
+    return bytes(row["data"]) if row else None
+
+
+def close() -> None:
+    """Close the Postgres pool on shutdown (no-op for SQLite)."""
+    global _pool
+    if _pool is not None:
+        _pool.close()
+        _pool = None

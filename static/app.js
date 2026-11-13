@@ -58,6 +58,7 @@ function route() {
   const tab = { listing: "explore", owner: "owner" }[key] || key;
   $$(".tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + tab));
   $$("#nav a, #tabbar a").forEach((a) => a.classList.toggle("active", a.dataset.tab === tab));
+  $("#aifab").classList.toggle("hidden", tab === "ask");
   if (key !== "listing") window.scrollTo(0, 0);
   if (tab === "explore") { setTimeout(fitExplore, 50); if (key === "listing" && val) showListing(val); }
   if (tab === "post") setTimeout(() => pickMap?.invalidateSize(), 50);
@@ -65,6 +66,7 @@ function route() {
   if (key === "owner") { const t = val || ME?.owner_token; if (t) loadOwner(t); else $("#owner-view").innerHTML = `<div class="card authbox"><h3>Owner dashboard</h3><p>Sign in as an owner to manage your flats, visit requests, tenants and bills.</p><a class="btn primary" href="#account">Sign in / Create account</a></div>`; }
   if (key === "roommates") loadRoommates(val || ME?.roommate_token);
   if (key === "account") renderAccount();
+  if (key === "post") setKind(val || $("#p-kind").value);
   if (key === "post" && ME) { const f = $("#post-form"); if (!f.owner_name.value) f.owner_name.value = ME.name; if (!f.owner_phone.value) f.owner_phone.value = ME.phone; }
 }
 window.addEventListener("hashchange", route);
@@ -109,19 +111,19 @@ let ME = null;
 const getMode = () => store.get("gharsure_mode") || ME?.default_mode || "renter";
 
 const TABS = {
-  renter: [["explore", "Explore"], ["roommates", "Roommates"], ["booking", "My bookings"], ["check", "Scam check"], ["ask", "Ask AI"]],
-  owner: [["owner", "Dashboard"], ["post", "Add flat"], ["check", "Scam check"], ["ask", "Ask AI"]],
+  renter: [["explore", "Explore"], ["roommates", "Roommates"], ["post=flatmate", "Post"], ["booking", "Bookings"], ["check", "Scam check"]],
+  owner: [["owner", "Dashboard"], ["post=owner", "Add flat"], ["check", "Scam check"]],
 };
 const MOBILE_TABS = {
-  owner: [["owner", "📊", "Dashboard"], ["check", "🛡️", "Scam check"], ["post", "＋", "Add flat", true], ["ask", "💬", "Ask AI"], ["account", "👤", "Account"]],
-  renter: [["explore", "🏠", "Explore"], ["roommates", "👥", "Roommates"], ["check", "🛡️", "Check", true], ["booking", "📅", "Bookings"], ["account", "👤", "Account"]],
+  owner: [["owner", "📊", "Dashboard"], ["check", "🛡️", "Scam check"], ["post=owner", "＋", "Add flat", true], ["ask", "✨", "Ask AI"], ["account", "👤", "Account"]],
+  renter: [["explore", "🏠", "Explore"], ["roommates", "👥", "Roommates"], ["post=flatmate", "＋", "Post", true], ["booking", "📅", "Bookings"], ["account", "👤", "Account"]],
 };
 
 function renderNav() {
   const mode = getMode();
-  $("#nav").innerHTML = TABS[mode].map(([t, label]) => `<a href="#${t}" data-tab="${t}">${label}</a>`).join("");
+  $("#nav").innerHTML = TABS[mode].map(([t, label]) => `<a href="#${t}" data-tab="${t.split("=")[0]}">${label}</a>`).join("");
   $("#tabbar").innerHTML = MOBILE_TABS[mode].map(([t, icon, label, fab]) =>
-    `<a href="#${t}" data-tab="${t}" ${fab ? 'class="fab"' : ""}><span>${icon}</span>${label}</a>`).join("");
+    `<a href="#${t}" data-tab="${t.split("=")[0]}" ${fab ? 'class="fab"' : ""}><span>${icon}</span>${label}</a>`).join("");
   $("#mode-switch").classList.toggle("hidden", !ME);
   $$("#mode-switch button").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
   $("#acct-btn").textContent = ME ? "👤 " + ME.name.split(" ")[0] : "Sign in";
@@ -195,6 +197,9 @@ function renderAccount() {
       <a class="bookrow" href="#owner"><span>📊 Owner dashboard</span><span class="muted">${ME.listings} flat(s) ›</span></a>
       <a class="bookrow" href="#booking"><span>📅 My bookings</span><span class="muted">${ME.bookings.length} ›</span></a>
       <a class="bookrow" href="#roommates"><span>👥 Roommate profile</span><span class="muted">${ME.roommate_token ? "Active" : "Create"} ›</span></a>
+      <a class="bookrow" href="#post=vacating"><span>🚪 Leaving your flat? Post it for the next tenant</span><span class="muted">›</span></a>
+      <a class="bookrow" href="#post=flatmate"><span>🧑‍🤝‍🧑 Need a flatmate for your flat?</span><span class="muted">›</span></a>
+      <a class="bookrow" href="#check"><span>🛡️ Scam check a listing</span><span class="muted">›</span></a>
       <a class="bookrow" href="#ask"><span>💬 Rental safety assistant</span><span class="muted">›</span></a></div>
     <button class="btn" id="logout" style="width:100%">Sign out</button>`;
   $$("[name=m]").forEach((r) => (r.onchange = () => { store.set("gharsure_mode", r.value); renderNav(); }));
@@ -218,10 +223,12 @@ function renderMyBookings() {
 async function search(e) {
   e?.preventDefault();
   const params = new URLSearchParams([...new FormData($("#search"))].filter(([, v]) => v));
+  if (KIND_FILTER) params.set("kind", KIND_FILTER);
+  $("#cards").innerHTML = Array.from({ length: 4 }, () => `<div class="lcard skel"><div class="img"></div><div class="body"><i></i><i></i><i></i></div></div>`).join("");
   const list = await api("/api/listings?" + params);
-  $("#result-count").textContent = `${list.length} vacant flat${list.length === 1 ? "" : "s"} found`;
+  $("#result-count").textContent = `${list.length} home${list.length === 1 ? "" : "s"} available`;
   $("#cards").innerHTML = list.length ? list.map(cardHTML).join("") :
-    `<div class="card">No vacant flats match. Try another city or a higher budget.</div>`;
+    `<div class="empty"><b>🏠</b><h3>No homes match yet</h3><p class="muted">Try another city, a higher budget or a different type.</p></div>`;
   $$(".lcard").forEach((c) => {
     c.onclick = () => (location.hash = "listing=" + c.dataset.id);
     c.onmouseenter = () => markers[c.dataset.id]?.getElement()?.querySelector(".pricepin")?.classList.add("on");
@@ -230,7 +237,7 @@ async function search(e) {
   Object.values(markers).forEach((m) => m.remove());
   for (const k in markers) delete markers[k];
   list.forEach((l) => {
-    const icon = L.divIcon({ className: "", html: `<div class="pricepin">${shortInr(l.rent)}</div>`, iconSize: null });
+    const icon = L.divIcon({ className: "", html: `<div class="pricepin">${l.kind === "flatmate" ? shortInr(l.rent_share) + "/person" : shortInr(l.rent)}</div>`, iconSize: null });
     markers[l.id] = L.marker([l.lat, l.lng], { icon }).addTo(exploreMap)
       .bindPopup(`<b>${esc(l.title)}</b><br>${esc(l.locality)} · ${l.bhk} BHK<br><b>${inr(l.rent)}</b>/month<br>
         <span style="color:#0f9d58">● Vacant</span><br><a href="#listing=${l.id}">View & book visit →</a>`);
@@ -245,6 +252,31 @@ function fitExplore() {
   if (lastBounds) exploreMap.fitBounds(lastBounds, { maxZoom: 13 });
 }
 $("#search").onsubmit = search;
+let KIND_FILTER = "";
+$$("#kindtabs button").forEach((b) => (b.onclick = () => {
+  KIND_FILTER = b.dataset.kind;
+  $$("#kindtabs button").forEach((x) => x.classList.toggle("on", x === b));
+  search();
+}));
+const KIND_TEXT = {
+  owner: ["List your flat, free", "Tenants contact you directly, no broker. Your number stays hidden until you accept a visit request.", "Monthly rent (₹)", "Publish listing"],
+  vacating: ["Leaving your flat? Help the next tenant", "Post the flat you're moving out of. Renters request a visit; you share details (and the owner's number, if they agreed) once you accept.", "Current monthly rent (₹)", "Post my flat"],
+  flatmate: ["Find a flatmate for your flat", "You already live here and have a spare room or bed. People who match your lifestyle can request to visit.", "Total flat rent (₹)", "Post my room"],
+};
+function setKind(kind) {
+  const k = KIND_TEXT[kind] ? kind : "owner";
+  $("#p-kind").value = k;
+  $$("[name=kindpick]").forEach((r) => (r.checked = r.value === k));
+  $$(".k-vacating, .k-flatmate").forEach((el) => el.classList.add("hidden"));
+  $$(`.k-${k}`).forEach((el) => el.classList.remove("hidden"));
+  const [h, sub, rentLabel, btn] = KIND_TEXT[k];
+  $("#post-heading").textContent = h; $("#post-sub").textContent = sub;
+  $("#rent-label").textContent = rentLabel; $("#post-btn").textContent = btn;
+  $("#from-label").textContent = k === "flatmate" ? "Room free from" : "Flat free from";
+  $("#p-from").required = k === "vacating";
+  $("#p-share").required = k === "flatmate";
+}
+$$("[name=kindpick]").forEach((r) => (r.onchange = () => setKind(r.value)));
 
 function dealText(l) {
   const f = l.safety.fair_rent;
@@ -258,10 +290,12 @@ function dealText(l) {
 function cardHTML(l) {
   return `<div class="lcard" data-id="${l.id}">
     <div class="img"><div class="ph" style="background-image:url('${esc(l.photos[0] || "")}')"></div><span class="badge ${l.safety.level}">${LEVEL[l.safety.level]}</span>
-      <span class="pricechip">${inr(l.rent)} <small>/ month</small></span></div>
+      ${l.kind !== "owner" ? `<span class="kindbadge ${l.kind}">${l.kind === "vacating" ? "🚪 Tenant leaving" : "🧑‍🤝‍🧑 Flatmate wanted"}</span>` : ""}
+      <span class="pricechip">${l.kind === "flatmate" ? `${inr(l.rent_share)} <small>/ person</small>` : `${inr(l.rent)} <small>/ month</small>`}</span></div>
     <div class="body">
       <div class="title">${esc(l.title)}</div>
-      <div class="muted small">${esc(l.locality)}, ${esc(l.city)} · ${l.bhk} BHK · ${l.sqft} sq ft · ${esc(l.furnishing)}</div>
+      <div class="loc">📍 ${esc(l.locality)}, ${esc(l.city)}</div>
+      <div class="pills"><span>${l.bhk} BHK</span><span>${l.sqft} sq ft</span><span>${esc(l.furnishing.replace("-", " "))}</span></div>
       ${dealText(l)}
     </div></div>`;
 }
@@ -272,23 +306,25 @@ async function showListing(id) {
   const [main, ...rest] = l.photos;
   openModal(`
     <h2>${esc(l.title)}</h2>
-    <div class="muted">${esc(l.locality)}, ${esc(l.city)} · Listed by owner ${esc(l.owner_name)} ·
+    <div class="muted">${esc(l.locality)}, ${esc(l.city)} · ${l.kind === "owner" ? "Listed by owner" : "Posted by tenant"} ${esc(l.owner_name)} ·
       <span class="badge ${l.available ? "vacant" : "rented"}">${l.available ? "Vacant now" : "Rented out"}</span></div>
     <div class="gallery"><img src="${esc(main)}" alt="Main photo"><div class="side">${rest.slice(0, 2).map((p) => `<img src="${esc(p)}" alt="Photo">`).join("")}</div></div>
     <div class="detail">
       <div>
         <div class="facts">
           <div>${l.bhk} BHK<span>Bedrooms</span></div><div>${l.sqft} sq ft<span>Area</span></div>
-          <div>${esc(l.furnishing)}<span>Furnishing</span></div><div>No brokerage<span>Direct owner</span></div>
+          <div>${esc(l.furnishing)}<span>Furnishing</span></div><div>No brokerage<span>${l.kind === "owner" ? "Direct owner" : "Direct contact"}</span></div>
         </div>
+        ${l.kind === "vacating" ? `<div class="kindbanner vacating">🚪 <b>A current tenant is moving out</b>${l.available_from ? ` · free from <b>${esc(l.available_from)}</b>` : ""}. Ask them anything about the flat, the neighbourhood and the owner.${l.owner_contact_shared ? " The owner's number is shared after your visit is accepted." : ""}</div>` : ""}
+        ${l.kind === "flatmate" ? `<div class="kindbanner flatmate">🧑‍🤝‍🧑 <b>${esc(l.owner_name)} lives here and needs ${l.spots} flatmate${l.spots > 1 ? "s" : ""}</b>${l.pref_gender !== "any" ? ` (${esc(l.pref_gender)})` : ""}. You pay <b>${inr(l.rent_share)}/month</b> of the ${inr(l.rent)} total${l.available_from ? ` · room free from <b>${esc(l.available_from)}</b>` : ""}. <a href="#roommates">Make a roommate profile</a> to see how well you'd match.</div>` : ""}
         <p style="white-space:pre-line">${esc(l.description)}</p>
         <div class="safety ${l.safety.level}"><b>${LEVEL[l.safety.level]}</b> · AI risk score ${l.safety.score}/100<br>
           <span class="small">Photos are original, the rent is in line with the area${l.safety.fair_rent ? ` (fair rent ≈ ${inr(l.safety.fair_rent)})` : ""}, and the description has no scam patterns.</span></div>
         <h3>Location</h3><div id="minimap" class="minimap"></div>
       </div>
       <div class="bookbox">
-        <div class="price">${inr(l.rent)} <small>/ month</small></div>
-        <p class="small muted">Request a visit. The owner's number is shared once they accept. <b>Never pay before visiting.</b></p>
+        <div class="price">${l.kind === "flatmate" ? `${inr(l.rent_share)} <small>/ person / month</small>` : `${inr(l.rent)} <small>/ month</small>`}</div>
+        <p class="small muted">Request a visit. ${l.kind === "owner" ? "The owner's" : "Their"} number is shared once they accept. <b>Never pay before visiting.</b></p>
         <form id="book-form" class="form">
           <label>Visit date<input type="date" name="visit_date" min="${today()}" value="${addDays(1)}" required></label>
           <label>Move-in date<input type="date" name="move_in_date" min="${today()}" value="${addDays(7)}" required></label>
@@ -338,6 +374,12 @@ $("#post-form").onsubmit = (e) => {
   const fd = new FormData(e.target);
   fd.set("lat", pickMarker._ll.lat);
   fd.set("lng", pickMarker._ll.lng);
+  const kind = fd.get("kind");
+  // only send the fields that belong to this type of post
+  if (kind !== "flatmate") ["rent_share", "spots"].forEach((k) => fd.delete(k));
+  if (kind !== "vacating") ["owner_contact_name", "owner_contact_phone", "owner_consent"].forEach((k) => fd.delete(k));
+  if (kind === "owner") ["available_from", "pref_gender"].forEach((k) => fd.delete(k));
+  for (const [k, v] of [...fd]) if (v === "") fd.delete(k);
   busy($("#post-btn"), async () => {
     const r = await api("/api/listings", { method: "POST", body: fd });
     remember("owner", r.owner_token);
@@ -348,7 +390,7 @@ $("#post-form").onsubmit = (e) => {
           <p><b>Your private owner dashboard link</b>. Bookmark it; it's how you manage requests, tenants and bills:</p>
           <div class="copy">${esc(link)}</div><p><a class="btn primary" href="#owner=${esc(r.owner_token)}">Open owner dashboard</a></p></div>`
       : `<div class="card"><h3>⛔ Listing held for review</h3><p>Our AI found serious problems with this listing, so it is not shown to tenants.</p>${riskHTML(r.risk)}</div>`;
-    e.target.reset(); $("#p-previews").innerHTML = ""; fillLocality($("#p-city"), $("#p-locality"));
+    e.target.reset(); $("#p-previews").innerHTML = ""; setKind(kind); fillLocality($("#p-city"), $("#p-locality"));
     $("#post-result").scrollIntoView({ behavior: "smooth" });
     search();
   });
@@ -401,6 +443,8 @@ async function loadBooking(id) {
         <div class="contact"><a class="btn primary" href="tel:+91${esc(b.owner.phone)}">📞 Call</a>
         <a class="btn ok" target="_blank" rel="noopener" href="${esc(b.owner.whatsapp)}">💬 WhatsApp</a>
         <a class="btn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${b.owner.lat},${b.owner.lng}">🧭 Directions</a></div>
+        ${b.property_owner ? `<div class="notice small" style="margin-top:12px">🏠 <b>Property owner:</b> ${esc(b.property_owner.name)} · ${esc(b.property_owner.phone)}
+          <div class="contact"><a class="btn sm" href="tel:+91${esc(b.property_owner.phone)}">📞 Call owner</a><a class="btn ok sm" target="_blank" rel="noopener" href="${esc(b.property_owner.whatsapp)}">💬 WhatsApp owner</a></div></div>` : ""}
         <p class="small muted">Visit first, check the owner's ID and property papers, sign the agreement, then pay.</p>` :
         b.status === "pending" ? `<p class="muted">Waiting for the owner to respond. Their number will appear here once they accept.</p>` : ""}
       ${["pending", "accepted"].includes(b.status) && !b.moved_in ? `<button class="btn sm" id="cancel-b">Cancel booking</button>` : ""}
@@ -699,6 +743,7 @@ function rmDashboard(token, d) {
       <div class="contact"><button class="btn sm" id="rm-edit">✏️ Edit profile</button>
         <button class="btn sm" id="rm-pause">${d.me.active ? "⏸ Hide my profile" : "▶️ Show my profile"}</button></div></div>
     ${d.incoming.length ? `<h3>📩 Requests for you</h3>${d.incoming.map((m) => rmCardHTML(m, token, true)).join("")}` : ""}
+    <a class="card" href="#post=flatmate" style="display:block;text-decoration:none">🧑‍🤝‍🧑 <b>Already have a flat?</b> Post your spare room and let matching people find you →</a>
     <h3>✨ Best matches</h3>
     ${top.length ? top.map((m) => rmCardHTML(m, token)).join("") : `<div class="card muted">No matches yet in ${esc(d.me.city)}. Share GharSure with your college friends!</div>`}
     <p class="small muted">Your profile link (keep it private): <span class="copy">${esc(location.origin)}/#roommates=${esc(token)}</span></p>`;

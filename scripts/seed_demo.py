@@ -111,12 +111,12 @@ LISTINGS = [
 
 
 def main() -> None:
-    if db.DATA_DIR.exists():
-        for p in [db.DB_PATH, db.UPLOAD_DIR]:
-            if p.is_dir():
-                shutil.rmtree(p)
-            elif p.exists():
-                p.unlink()
+    if db.IS_POSTGRES:
+        # Never wipe a real database: demo data is only for the local SQLite file.
+        raise SystemExit("DATABASE_URL is set: refusing to reset a real database with demo data.")
+    if db.DB_PATH.exists():
+        db.DB_PATH.unlink()
+    shutil.rmtree(db.DATA_DIR / "uploads", ignore_errors=True)  # old versions stored photos on disk
     shutil.rmtree(DEMO_DIR, ignore_errors=True)
     DEMO_DIR.mkdir()
 
@@ -138,6 +138,30 @@ def main() -> None:
             owner_links.append((title, body["owner_token"], body["risk"]["score"]))
             if i == 0:
                 first_photo = room_photo(0)
+
+        # A tenant moving out, and a student looking for a flatmate (Pune)
+        pune = CITY_CENTERS["Pune"]
+        nxt = (date.today() + timedelta(days=20)).isoformat()
+        for i, extra in enumerate([
+            dict(kind="vacating", title="Moving out: cosy 1BHK in Baner, free next month", locality="Baner", bhk=1,
+                 sqft=620, furnishing="semi-furnished", rent=19000, available_from=nxt,
+                 description="I'm moving to Bengaluru for my job, so this flat is free from next month. Great owner, "
+                             "quick repairs, 24x7 water. Happy to show you around any evening.",
+                 owner_name="Priya Nair", owner_contact_name="Mr. Gokhale", owner_contact_phone="9876511111",
+                 owner_consent="true", dlat=0.04, dlng=-0.07),
+            dict(kind="flatmate", title="Flatmate wanted: room in 2BHK near COEP", locality="Kothrud", bhk=2,
+                 sqft=980, furnishing="furnished", rent=24000, rent_share=12000, spots=1, pref_gender="male",
+                 available_from=nxt,
+                 description="I'm a final year student living here. Looking for one chill flatmate: non-smoker, "
+                             "keeps the kitchen clean. Own room with balcony, WiFi and cook included.",
+                 owner_name="Rohan Kulkarni", dlat=-0.008, dlng=-0.035),
+        ]):
+            dlat, dlng = extra.pop("dlat"), extra.pop("dlng")
+            r = client.post("/api/listings", data={
+                **extra, "city": "Pune", "owner_phone": f"98222{33300 + i}",
+                "lat": pune[0] + dlat, "lng": pune[1] + dlng,
+            }, files=[("photos", (f"{k}.jpg", jpeg(room_photo(500 + i * 10 + k)), "image/jpeg")) for k in range(2)])
+            r.raise_for_status()
 
         # Demo files for the scam checker / fake listing
         stolen_edit(first_photo).save(DEMO_DIR / "stolen_photo_edited.jpg", quality=88)

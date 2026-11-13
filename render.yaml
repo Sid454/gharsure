@@ -1,4 +1,9 @@
 # Render Blueprint: one free web service (https://render.com/docs/blueprint-spec)
+#
+# Two modes:
+#  - DATABASE_URL empty  -> demo mode: sample flats/accounts, reset on every restart.
+#  - DATABASE_URL set    -> real mode: data (incl. photos) is stored permanently in Postgres
+#                           (e.g. a free Supabase project: use its "Session pooler" connection string).
 services:
   - type: web
     name: gharsure
@@ -6,9 +11,13 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt && python setup.py build_ext --inplace
     startCommand: bash scripts/start.sh
-    healthCheckPath: /api/meta
+    healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7
       - key: RENTSHIELD_PHONE_SALT
         generateValue: true
+      - key: GHARSURE_DEMO
+        value: "1"
+      - key: DATABASE_URL
+        sync: false

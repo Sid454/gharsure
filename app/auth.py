@@ -117,7 +117,8 @@ def me(authorization: str | None = Header(None)):
 
 def link_booking(account_id: str, booking_id: str) -> None:
     with db.connect() as con:
-        con.execute("INSERT OR IGNORE INTO account_bookings VALUES (?, ?)", (account_id, booking_id))
+        con.execute("INSERT INTO account_bookings (account_id, booking_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                    (account_id, booking_id))
 
 
 def set_roommate_token(account_id: str, token: str) -> None:
