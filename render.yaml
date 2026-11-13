@@ -9,6 +9,7 @@ services:
     name: gharsure
     runtime: python
     plan: free
+    region: singapore   # closest Render region to India and to Supabase ap-southeast
     buildCommand: pip install -r requirements.txt && python setup.py build_ext --inplace
     startCommand: bash scripts/start.sh
     healthCheckPath: /api/health
